@@ -1,0 +1,137 @@
+# ==============================================================================
+#                      TripTicket - Configuration
+# ==============================================================================
+
+ticket:
+  # Default duration of a trip ticket in seconds (3 minutes = 180 seconds)
+  duration-seconds: 180
+
+  # Seconds before the ticket expires to trigger the countdown warning (default: 10 seconds)
+  warning-seconds: 10
+
+  # List of seconds remaining at which to send warning countdown reminders
+  countdown-seconds:
+    - 10
+    - 5
+    - 4
+    - 3
+    - 2
+    - 1
+
+  # Time in seconds before an unaccepted invitation ticket expires (default: 60 seconds)
+  invite-timeout-seconds: 60
+
+  # Cooldown in seconds before a player can issue another ticket (0 to disable)
+  cooldown-seconds: 0
+
+  # Warmup delay in seconds before the guest embarks (0 to disable)
+  warmup-seconds: 0
+  cancel-warmup-on-move: true
+  cancel-warmup-on-damage: true
+
+  # Behavior if the visiting guest dies during their trip:
+  # "cancel" - ends trip, guest respawns normally at their home/bed/spawn
+  # "return" - guest respawns back at their original pre-trip location
+  on-death: "cancel"
+
+  # Return visiting guests to their original world if they disconnect
+  return-on-disconnect: true
+
+  # Safely return all active visiting guests home on server shutdown/reload
+  return-on-shutdown: true
+
+  # Check if return location is obstructed or hazardous and adjust safely
+  safe-teleport-check: true
+
+# ==============================================================================
+# Permissions Configuration
+# ==============================================================================
+# Configure access rules directly here without needing a permissions manager,
+# or map custom permission nodes for plugins like LuckPerms.
+permissions:
+  # When true, ALL players can issue trip tickets for the default duration (3m).
+  # When false, players strictly require the permission node configured below.
+  # (Default: true)
+  allow-everyone-default-duration: true
+
+  # When true, only server Operators (Ops) or players with the custom duration
+  # permission can specify custom trip lengths (e.g., /ticket Steve 10m).
+  # Non-ops will automatically use the default duration.
+  # (Default: true - Ops can request any length, regular players get default length)
+  custom-duration-ops-only: true
+
+  # When true, all players can accept incoming trip tickets (/ticket accept).
+  # When false, requires the accept permission node.
+  # (Default: true)
+  allow-everyone-accept: true
+
+  # When true, visiting guests can use /ticket return to return home early.
+  # (Default: true)
+  allow-everyone-return: true
+
+  # When true, players can check their remaining ticket time with /ticket remaining.
+  # (Default: true)
+  allow-everyone-check-time: true
+
+  # Customizable permission nodes (compatible with LuckPerms and other permission plugins)
+  nodes:
+    invite: "tripticket.invite"
+    accept: "tripticket.use"
+    return: "tripticket.return"
+    check-time: "tripticket.time"
+    custom-duration: "tripticket.customduration"
+    bypass-cooldown: "tripticket.cooldown.bypass"
+    bypass-warmup: "tripticket.warmup.bypass"
+    reload: "tripticket.reload"
+    admin: "tripticket.admin"
+
+visuals:
+  # Show live remaining ticket time on the Action Bar
+  show-actionbar: true
+
+  # Display screen title/subtitle when the countdown warning fires
+  show-title-on-warning: true
+
+  # Sound effects (set to "NONE" to disable any sound)
+  play-sounds: true
+  sounds:
+    embark: "ENTITY_ENDERMAN_TELEPORT"
+    warning: "BLOCK_NOTE_BLOCK_PLING"
+    return: "ENTITY_ENDERMAN_TELEPORT"
+
+  # Particle effects (set to "NONE" to disable)
+  play-particles: true
+  particles:
+    embark: "PORTAL"
+    return: "REVERSE_PORTAL"
+
+messages:
+  prefix: "&8[&6TripTicket&8]&r "
+  ticket-sent: "%prefix%&aIssued a Trip Ticket to &e%guest%&a! Valid for &e%duration%&a once accepted."
+  ticket-accepted-guest: "%prefix%&aYou embarked on a trip to &e%host%&a's world (&b%world%&a)! Ticket valid for &e%duration%&a."
+  ticket-accepted-host: "%prefix%&e%guest% &aaccepted your Trip Ticket and arrived! Their visit will last for &e%duration%&a."
+  ticket-declined-guest: "%prefix%&7You declined the Trip Ticket invitation."
+  ticket-declined-host: "%prefix%&c%guest% declined your Trip Ticket invitation."
+  ticket-expired-guest-pending: "%prefix%&cYour Trip Ticket invitation from &e%host% &chas expired."
+  ticket-expired-host-pending: "%prefix%&cYour Trip Ticket invitation to &e%guest% &chas expired."
+  warning-countdown: "%prefix%&c&lTICKET EXPIRING! &eYou will be whisked back to your original world in &c%seconds% seconds&e!"
+  ticket-expired-guest: "%prefix%&aYour Trip Ticket has expired. Whisked back to your original world!"
+  ticket-expired-host: "%prefix%&6%guest%'s Trip Ticket has expired and they were whisked back home."
+  return-early-guest: "%prefix%&6You concluded your visit early. Whisked back to your original world!"
+  return-early-host: "%prefix%&e%guest% &6ended their trip early and returned home."
+  cancelled-by-host: "%prefix%&cYour Trip Ticket was cancelled by your host (&e%host%&c). Returned to your original world."
+  time-remaining: "%prefix%&eTime remaining on your Trip Ticket: &a%remaining%&e."
+  not-on-trip: "%prefix%&cYou are not currently visiting another world on a Trip Ticket."
+  already-on-trip: "%prefix%&cPlayer &e%guest% &cis already on a trip visit!"
+  already-on-trip-self: "%prefix%&cYou are already visiting another world on a trip ticket! Use &e/ticket return &cfirst."
+  no-pending-ticket: "%prefix%&cYou have no pending Trip Ticket invitations."
+  player-not-found: "%prefix%&cPlayer &e%player% &cnot found or offline."
+  cannot-invite-self: "%prefix%&cYou cannot issue a Trip Ticket to yourself!"
+  cooldown: "%prefix%&cYou must wait &e%seconds% seconds &cbefore issuing another Trip Ticket."
+  warmup-start: "%prefix%&eEmbarking in &6%seconds% seconds&e. Do not move or take damage!"
+  warmup-cancelled-move: "%prefix%&cTrip cancelled because you moved."
+  warmup-cancelled-damage: "%prefix%&cTrip cancelled because you took damage."
+  offline-return-notice: "%prefix%&eYour trip ticket concluded while you were offline. You have been returned to your original world."
+  custom-duration-denied: "%prefix%&cOnly server operators can specify custom ticket durations. Using default duration (&e%duration%&c)."
+  reloaded: "%prefix%&aTripTicket configuration reloaded successfully!"
+  no-permission: "%prefix%&cYou do not have permission to execute this command."

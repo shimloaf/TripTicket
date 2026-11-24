@@ -1,0 +1,53 @@
+name: TripTicket
+version: 1.0.0
+main: com.vibecode.tripticket.TripTicketPlugin
+api-version: '1.20'
+author: Vibecode
+description: Invite other players to visit your world with temporary trip tickets, return timers, and countdown warnings.
+
+commands:
+  tripticket:
+    description: Primary command to issue and manage cross-world trip tickets.
+    aliases:
+      - ticket
+      - trip
+      - tt
+    usage: /<command> [player|invite|accept|deny|return|remaining|cancel|reload|help]
+
+permissions:
+  tripticket.invite:
+    description: Allows issuing a trip ticket to invite a player to your world.
+    default: true
+  tripticket.use:
+    description: Allows accepting incoming trip tickets.
+    default: true
+  tripticket.return:
+    description: Allows using /ticket return to go back to your original world early.
+    default: true
+  tripticket.time:
+    description: Allows checking remaining ticket time with /ticket remaining.
+    default: true
+  tripticket.customduration:
+    description: Allows specifying a custom duration when issuing a ticket (e.g. /ticket Notch 10m).
+    default: op
+  tripticket.cooldown.bypass:
+    description: Bypasses the cooldown between issuing trip tickets.
+    default: op
+  tripticket.warmup.bypass:
+    description: Bypasses the warmup delay before embarking.
+    default: op
+  tripticket.reload:
+    description: Allows reloading the configuration with /ticket reload.
+    default: op
+  tripticket.admin:
+    description: Full administrative access to cancel any active trip ticket and reload configuration.
+    default: op
+    children:
+      tripticket.invite: true
+      tripticket.use: true
+      tripticket.return: true
+      tripticket.time: true
+      tripticket.customduration: true
+      tripticket.cooldown.bypass: true
+      tripticket.warmup.bypass: true
+      tripticket.reload: true
