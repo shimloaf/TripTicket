@@ -79,7 +79,7 @@ If you prefer to manage permissions through a permissions manager like **LuckPer
 
 ---
 
-## Building
+## Building & Releases
 
 Requires Java 21+.
 
@@ -93,32 +93,17 @@ Or build using Gradle:
 gradle build
 ```
 
-The compiled JAR file will be generated in `target/TripTicket-<version>.jar` (or `build/libs/TripTicket-<version>.jar`).
+The compiled JAR file is generated in `target/TripTicket-<version>.jar` (or `build/libs/TripTicket-<version>.jar`).
 
----
+### Releases
+Pre-built JARs are automatically published to [GitHub Releases](https://github.com/shimloaf/TripTicket/releases).
 
-## Versioning & Releases
-
-This project uses [Semantic Versioning (SemVer)](https://semver.org/):
-- **MAJOR** (`x.0.0`): Incompatible configuration, session storage, or API breaking changes.
-- **MINOR** (`1.x.0`): Backwards-compatible new features and subcommands.
-- **PATCH** (`1.0.x`): Backwards-compatible bug fixes and performance improvements.
-
-The version is defined in `pom.xml` (and `build.gradle`) and is automatically injected into `plugin.yml` during build.
-
-### Cutting a Release
-1. Update `<version>` in `pom.xml` and `version` in `build.gradle` (e.g. `1.0.1`).
-2. Commit the change:
+To create a new release:
+1. Update `<version>` in `pom.xml` and `build.gradle`.
+2. Push your changes and tag:
    ```bash
-   git commit -am "chore(release): bump version to 1.0.1"
+   git commit -am "Release 1.1.0"
+   git tag v1.1.0
+   git push origin main --tags
    ```
-3. Tag the commit with the `v` prefix:
-   ```bash
-   git tag -a v1.0.1 -m "Release v1.0.1"
-   ```
-4. Push both the commit and tag to GitHub:
-   ```bash
-   git push origin main
-   git push origin v1.0.1
-   ```
-5. GitHub Actions will automatically compile the plugin, create a GitHub Release for `v1.0.1`, and attach the ready-to-use `TripTicket-1.0.1.jar` file.
+   *(Or click **Run workflow** under the Actions tab on GitHub to publish a release at any time).*
