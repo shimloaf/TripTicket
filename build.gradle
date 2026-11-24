@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'com.vibecode'
-version = '1.0.0'
+version = '1.1.0'
 
 java {
     toolchain {
@@ -28,8 +28,15 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
+jar {
+    archiveBaseName = 'TripTicket'
+}
+
 processResources {
-    def props = [version: version]
+    def props = [
+        version: version,
+        project: [version: version]
+    ]
     inputs.properties props
     filteringCharset 'UTF-8'
     filesMatching('plugin.yml') {

@@ -9,10 +9,13 @@ When a host invites a guest, the guest's original location and world are saved. 
 ## Commands
 
 - `/ticket <player> [duration]` - Invite a player to visit your world.
-- `/ticket accept` - Accept an invite.
-- `/ticket deny` - Decline an invite.
+- `/ticket <your-name>` - Issue a ticket to yourself to initiate a permanent one-way random world trip (requires confirmation).
+- `/ticket accept` - Accept an invite or confirm a one-way self trip.
+- `/ticket deny` - Decline an invite or cancel a self trip.
 - `/ticket return` - Return home early.
 - `/ticket remaining` - Check time left on your visit.
+- `/ticket rip` - Perish after a 3-second countdown and respawn at the designated anchor/hub world.
+- `/ticket setrip` - Set the anchor respawn location for `/ticket rip` (Admin only).
 - `/ticket cancel <player>` - Cancel an invite or visitor.
 - `/ticket reload` - Reload config (`/ticket reload`).
 
@@ -65,6 +68,8 @@ If you prefer to manage permissions through a permissions manager like **LuckPer
 | `tripticket.use` | `true` | Accept incoming trip tickets (`/ticket accept`). |
 | `tripticket.return` | `true` | Return home early (`/ticket return`). |
 | `tripticket.time` | `true` | Check remaining visit time (`/ticket remaining`). |
+| `tripticket.rip` | `true` | Perish and respawn at anchor location (`/ticket rip`). |
+| `tripticket.setrip` | `op` | Set the anchor respawn location (`/ticket setrip`). |
 | `tripticket.cooldown.bypass` | `op` | Bypass cooldown between issuing tickets. |
 | `tripticket.warmup.bypass` | `op` | Bypass warmup delay before embarking. |
 | `tripticket.reload` | `op` | Reload the configuration (`/ticket reload`). |
@@ -76,12 +81,44 @@ If you prefer to manage permissions through a permissions manager like **LuckPer
 
 ## Building
 
+Requires Java 21+.
+
+Build using Maven:
 ```bash
 mvn clean package
 ```
-or
+
+Or build using Gradle:
 ```bash
 gradle build
 ```
 
-Requires Java 21+.
+The compiled JAR file will be generated in `target/TripTicket-<version>.jar` (or `build/libs/TripTicket-<version>.jar`).
+
+---
+
+## Versioning & Releases
+
+This project uses [Semantic Versioning (SemVer)](https://semver.org/):
+- **MAJOR** (`x.0.0`): Incompatible configuration, session storage, or API breaking changes.
+- **MINOR** (`1.x.0`): Backwards-compatible new features and subcommands.
+- **PATCH** (`1.0.x`): Backwards-compatible bug fixes and performance improvements.
+
+The version is defined in `pom.xml` (and `build.gradle`) and is automatically injected into `plugin.yml` during build.
+
+### Cutting a Release
+1. Update `<version>` in `pom.xml` and `version` in `build.gradle` (e.g. `1.0.1`).
+2. Commit the change:
+   ```bash
+   git commit -am "chore(release): bump version to 1.0.1"
+   ```
+3. Tag the commit with the `v` prefix:
+   ```bash
+   git tag -a v1.0.1 -m "Release v1.0.1"
+   ```
+4. Push both the commit and tag to GitHub:
+   ```bash
+   git push origin main
+   git push origin v1.0.1
+   ```
+5. GitHub Actions will automatically compile the plugin, create a GitHub Release for `v1.0.1`, and attach the ready-to-use `TripTicket-1.0.1.jar` file.

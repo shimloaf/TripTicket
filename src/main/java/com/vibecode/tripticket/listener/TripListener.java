@@ -45,6 +45,8 @@ public class TripListener implements Listener {
         UUID uuid = player.getUniqueId();
 
         ticketManager.cancelWarmup(uuid);
+        ticketManager.cancelRipCountdown(uuid, null);
+        ticketManager.cancelSelfTrip(uuid);
 
         TripSession session = ticketManager.getSession(uuid);
         if (session != null) {
@@ -79,6 +81,7 @@ public class TripListener implements Listener {
         UUID uuid = player.getUniqueId();
 
         ticketManager.cancelWarmup(uuid);
+        ticketManager.cancelRipCountdown(uuid, null);
 
         TripSession session = ticketManager.getSession(uuid);
         if (session != null) {
@@ -95,6 +98,16 @@ public class TripListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
+
+        // 1. Check if the player died from a /ticket rip
+        Location ripLoc = ticketManager.getPendingRipRespawns().remove(player.getUniqueId());
+        if (ripLoc != null) {
+            event.setRespawnLocation(ripLoc);
+            MessageUtil.sendMessage(player, configManager.getMessage("rip-respawn-notice"));
+            return;
+        }
+
+        // 2. Check if visiting guest should return to original world on death
         Location returnLoc = pendingRespawnReturns.remove(player.getUniqueId());
         if (returnLoc != null) {
             Location safeLoc = LocationSafety.getSafeLocation(returnLoc, configManager.isSafeTeleportCheck());
@@ -105,34 +118,38 @@ public class TripListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerMove(PlayerMoveEvent event) {
-        if (!configManager.isCancelWarmupOnMove()) {
-            return;
-        }
-
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        if (to == null) return;
 
-        if (ticketManager.hasActiveWarmup(uuid)) {
-            Location from = event.getFrom();
-            Location to = event.getTo();
-            if (to == null) return;
+        boolean blockMoved = from.getBlockX() != to.getBlockX() || from.getBlockY() != to.getBlockY() || from.getBlockZ() != to.getBlockZ();
 
-            if (from.getBlockX() != to.getBlockX() || from.getBlockY() != to.getBlockY() || from.getBlockZ() != to.getBlockZ()) {
-                ticketManager.cancelWarmup(uuid);
-                MessageUtil.sendMessage(player, configManager.getMessage("warmup-cancelled-move"));
-            }
+        // Check RIP countdown cancellation
+        if (configManager.isRipCancelOnMove() && blockMoved && ticketManager.hasActiveRipCountdown(uuid)) {
+            ticketManager.cancelRipCountdown(uuid, configManager.getMessage("rip-cancelled-move"));
+        }
+
+        // Check warmup cancellation
+        if (configManager.isCancelWarmupOnMove() && blockMoved && ticketManager.hasActiveWarmup(uuid)) {
+            ticketManager.cancelWarmup(uuid);
+            MessageUtil.sendMessage(player, configManager.getMessage("warmup-cancelled-move"));
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageEvent event) {
-        if (!configManager.isCancelWarmupOnDamage()) {
-            return;
-        }
-
         if (event.getEntity() instanceof Player player) {
             UUID uuid = player.getUniqueId();
-            if (ticketManager.hasActiveWarmup(uuid)) {
+
+            // Check RIP countdown cancellation
+            if (configManager.isRipCancelOnDamage() && ticketManager.hasActiveRipCountdown(uuid)) {
+                ticketManager.cancelRipCountdown(uuid, configManager.getMessage("rip-cancelled-damage"));
+            }
+
+            // Check warmup cancellation
+            if (configManager.isCancelWarmupOnDamage() && ticketManager.hasActiveWarmup(uuid)) {
                 ticketManager.cancelWarmup(uuid);
                 MessageUtil.sendMessage(player, configManager.getMessage("warmup-cancelled-damage"));
             }

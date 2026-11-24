@@ -1,5 +1,5 @@
 name: TripTicket
-version: 1.0.0
+version: '${project.version}'
 main: com.vibecode.tripticket.TripTicketPlugin
 api-version: '1.20'
 author: Vibecode
@@ -12,7 +12,7 @@ commands:
       - ticket
       - trip
       - tt
-    usage: /<command> [player|invite|accept|deny|return|remaining|cancel|reload|help]
+    usage: /<command> [player|invite|accept|deny|return|remaining|rip|setrip|cancel|reload|help]
 
 permissions:
   tripticket.invite:
@@ -27,6 +27,12 @@ permissions:
   tripticket.time:
     description: Allows checking remaining ticket time with /ticket remaining.
     default: true
+  tripticket.rip:
+    description: Allows using /ticket rip to perish and respawn at the anchor world.
+    default: true
+  tripticket.setrip:
+    description: Allows setting the anchor location for /ticket rip.
+    default: op
   tripticket.customduration:
     description: Allows specifying a custom duration when issuing a ticket (e.g. /ticket Notch 10m).
     default: op
@@ -47,6 +53,8 @@ permissions:
       tripticket.use: true
       tripticket.return: true
       tripticket.time: true
+      tripticket.rip: true
+      tripticket.setrip: true
       tripticket.customduration: true
       tripticket.cooldown.bypass: true
       tripticket.warmup.bypass: true

@@ -24,7 +24,7 @@ public class TripTicketCommand implements CommandExecutor, TabCompleter {
     private final TicketManager ticketManager;
 
     private static final List<String> SUBCOMMANDS = List.of(
-            "invite", "accept", "deny", "decline", "return", "leave", "back", "remaining", "time", "cancel", "help", "reload"
+            "invite", "accept", "deny", "decline", "return", "leave", "back", "remaining", "time", "cancel", "rip", "setrip", "help", "reload"
     );
 
     public TripTicketCommand(TripTicketPlugin plugin, ConfigManager configManager, TicketManager ticketManager) {
@@ -49,6 +49,14 @@ public class TripTicketCommand implements CommandExecutor, TabCompleter {
 
             case "reload":
                 handleReload(sender);
+                return true;
+
+            case "rip":
+                handleRip(sender);
+                return true;
+
+            case "setrip":
+                handleSetRip(sender);
                 return true;
 
             case "accept":
@@ -118,7 +126,7 @@ public class TripTicketCommand implements CommandExecutor, TabCompleter {
         }
 
         if (guest.getUniqueId().equals(host.getUniqueId())) {
-            MessageUtil.sendMessage(host, configManager.getMessage("cannot-invite-self"));
+            ticketManager.requestSelfTrip(host);
             return;
         }
 
@@ -244,13 +252,55 @@ public class TripTicketCommand implements CommandExecutor, TabCompleter {
         MessageUtil.sendMessage(sender, configManager.getMessage("reloaded"));
     }
 
+    private void handleRip(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            MessageUtil.sendMessage(sender, "&cOnly players can use /ticket rip.");
+            return;
+        }
+
+        if (!configManager.canRip(player)) {
+            MessageUtil.sendMessage(player, configManager.getMessage("no-permission"));
+            return;
+        }
+
+        ticketManager.startRipCountdown(player);
+    }
+
+    private void handleSetRip(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            MessageUtil.sendMessage(sender, "&cOnly in-game players can set the RIP anchor location.");
+            return;
+        }
+
+        if (!configManager.canSetRip(player)) {
+            MessageUtil.sendMessage(player, configManager.getMessage("no-permission"));
+            return;
+        }
+
+        org.bukkit.Location loc = player.getLocation();
+        configManager.setRipAnchor(loc);
+
+        Map<String, String> ph = Map.of(
+                "world", loc.getWorld().getName(),
+                "x", String.format(Locale.ROOT, "%.1f", loc.getX()),
+                "y", String.format(Locale.ROOT, "%.1f", loc.getY()),
+                "z", String.format(Locale.ROOT, "%.1f", loc.getZ())
+        );
+        MessageUtil.sendMessage(player, configManager.getMessage("rip-anchor-set", ph));
+    }
+
     private void sendHelp(CommandSender sender, String label) {
         MessageUtil.sendMessage(sender, "&8===== &6TripTicket &8- &eCross-World Invites &8=====");
         MessageUtil.sendMessage(sender, "&e/" + label + " <player> [duration] &7- Invite a player to visit your world");
+        MessageUtil.sendMessage(sender, "&e/" + label + " <your-name> &7- Initiate a permanent random world trip");
         MessageUtil.sendMessage(sender, "&e/" + label + " accept &7- Accept a ticket invitation and embark");
         MessageUtil.sendMessage(sender, "&e/" + label + " deny &7- Decline a ticket invitation");
         MessageUtil.sendMessage(sender, "&e/" + label + " return &7- Return early to your original world");
         MessageUtil.sendMessage(sender, "&e/" + label + " remaining &7- Check time remaining on your ticket");
+        MessageUtil.sendMessage(sender, "&e/" + label + " rip &7- Perish and respawn at the anchor world");
+        if (configManager.canSetRip(sender)) {
+            MessageUtil.sendMessage(sender, "&e/" + label + " setrip &7- Set the anchor location for /ticket rip");
+        }
         MessageUtil.sendMessage(sender, "&e/" + label + " cancel <player> &7- Cancel an invitation or visitor");
         if (configManager.canReload(sender)) {
             MessageUtil.sendMessage(sender, "&e/" + label + " reload &7- Reload configuration");
@@ -265,19 +315,21 @@ public class TripTicketCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             String current = args[0].toLowerCase();
 
-            for (String sub : List.of("invite", "accept", "deny", "return", "remaining", "cancel", "help", "reload")) {
+            for (String sub : List.of("invite", "accept", "deny", "return", "remaining", "rip", "setrip", "cancel", "help", "reload")) {
                 if (sub.startsWith(current)) {
                     if (sub.equals("reload") && !configManager.canReload(sender)) {
+                        continue;
+                    }
+                    if (sub.equals("setrip") && !configManager.canSetRip(sender)) {
                         continue;
                     }
                     completions.add(sub);
                 }
             }
 
-            // Also suggest online player names directly
-            String senderName = sender.getName();
+            // Also suggest online player names directly (including self for self-trip)
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if (!player.getName().equalsIgnoreCase(senderName) && player.getName().toLowerCase().startsWith(current)) {
+                if (player.getName().toLowerCase().startsWith(current)) {
                     completions.add(player.getName());
                 }
             }

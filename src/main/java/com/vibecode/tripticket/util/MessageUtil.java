@@ -114,4 +114,40 @@ public final class MessageUtil {
 
         sendMessage(guest, "&8--------------------------------------------------");
     }
+
+    /**
+     * Sends an interactive clickable prompt confirming a permanent one-way self trip.
+     */
+    public static void sendSelfTripConfirmPrompt(Player player, String timeoutFormatted) {
+        if (player == null) return;
+
+        sendMessage(player, "&8--------------------------------------------------");
+        sendMessage(player, "&6&l⚠️ ONE-WAY RANDOM WORLD TRIP");
+        sendMessage(player, "&c&lWARNING: &eYou are about to embark on a &cpermanent one-way random trip&e!");
+        sendMessage(player, "&7You will be teleported to a random world and location with &cNO return ticket&7.");
+        sendMessage(player, "&7This prompt expires in &e" + timeoutFormatted + "&7.");
+
+        try {
+            TextComponent confirmBtn = new TextComponent(colorize("&a&l[✔ CONFIRM TRIP] "));
+            confirmBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/ticket accept"));
+            confirmBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(colorize("&aClick to permanently embark!"))));
+
+            TextComponent space = new TextComponent("   ");
+
+            TextComponent cancelBtn = new TextComponent(colorize("&c&l[✖ CANCEL]"));
+            cancelBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/ticket deny"));
+            cancelBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(colorize("&cClick to cancel this self-trip."))));
+
+            TextComponent actionRow = new TextComponent("");
+            actionRow.addExtra(confirmBtn);
+            actionRow.addExtra(space);
+            actionRow.addExtra(cancelBtn);
+
+            player.spigot().sendMessage(actionRow);
+        } catch (Throwable t) {
+            sendMessage(player, "&aType &e/ticket accept &ato confirm or &c/ticket deny &cto cancel.");
+        }
+
+        sendMessage(player, "&8--------------------------------------------------");
+    }
 }

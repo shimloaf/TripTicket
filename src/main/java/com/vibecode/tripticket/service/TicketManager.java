@@ -17,6 +17,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Coordinates trip tickets, guest visit sessions, countdown warnings, and persistent returns.
@@ -40,6 +41,9 @@ public class TicketManager {
     private final Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> activeWarmups = new ConcurrentHashMap<>();
     private final Map<UUID, Location> offlineReturns = new ConcurrentHashMap<>();
+    private final Map<UUID, BukkitTask> activeRipCountdowns = new ConcurrentHashMap<>();
+    private final Map<UUID, Location> pendingRipRespawns = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> pendingSelfTrips = new ConcurrentHashMap<>();
 
     private BukkitTask tickerTask;
     private final File dataFile;
@@ -109,6 +113,13 @@ public class TicketManager {
                 }
             }
         }
+
+        // 3. Expire pending unconfirmed self-trips
+        for (Map.Entry<UUID, Long> entry : new ArrayList<>(pendingSelfTrips.entrySet())) {
+            if (System.currentTimeMillis() > entry.getValue()) {
+                pendingSelfTrips.remove(entry.getKey());
+            }
+        }
     }
 
     private void sendCountdownWarning(Player guest, long secondsRemaining) {
@@ -172,9 +183,21 @@ public class TicketManager {
     }
 
     /**
-     * Guest accepts their pending trip ticket.
+     * Guest accepts their pending trip ticket (or confirms their one-way self trip).
      */
     public boolean acceptTicket(Player guest) {
+        // 1. Check if guest has a pending self-trip confirmation
+        Long selfTripExpiry = pendingSelfTrips.remove(guest.getUniqueId());
+        if (selfTripExpiry != null) {
+            if (System.currentTimeMillis() > selfTripExpiry) {
+                MessageUtil.sendMessage(guest, configManager.getMessage("self-trip-expired"));
+                return false;
+            }
+            executeSelfTrip(guest);
+            return true;
+        }
+
+        // 2. Otherwise process cross-player trip ticket invitation
         TripTicket ticket = pendingTickets.remove(guest.getUniqueId());
         if (ticket == null || ticket.isExpired(configManager.getInviteTimeoutSeconds())) {
             MessageUtil.sendMessage(guest, configManager.getMessage("no-pending-ticket"));
@@ -216,9 +239,16 @@ public class TicketManager {
     }
 
     /**
-     * Guest declines their pending ticket.
+     * Guest declines their pending ticket (or cancels their one-way self trip).
      */
     public boolean denyTicket(Player guest) {
+        // 1. Check if guest has a pending self trip
+        if (pendingSelfTrips.remove(guest.getUniqueId()) != null) {
+            MessageUtil.sendMessage(guest, configManager.getMessage("self-trip-cancelled"));
+            return true;
+        }
+
+        // 2. Otherwise process cross-player ticket
         TripTicket ticket = pendingTickets.remove(guest.getUniqueId());
         if (ticket == null) {
             MessageUtil.sendMessage(guest, configManager.getMessage("no-pending-ticket"));
@@ -245,6 +275,9 @@ public class TicketManager {
         if (configManager.isPlayParticles()) {
             SoundParticleUtil.spawnParticles(guestOriginalLocation, configManager.getParticleEmbark(), 30, 0.5, 1.0, 0.5, plugin.getLogger());
         }
+        if (configManager.isPlaySounds()) {
+            SoundParticleUtil.playBreezeWhiskSound(guest, configManager.getSoundEmbark(), plugin.getLogger());
+        }
 
         // Teleport guest to host
         guest.teleport(hostLocation);
@@ -254,8 +287,8 @@ public class TicketManager {
             SoundParticleUtil.spawnParticles(hostLocation, configManager.getParticleEmbark(), 30, 0.5, 1.0, 0.5, plugin.getLogger());
         }
         if (configManager.isPlaySounds()) {
-            SoundParticleUtil.playSound(guest, configManager.getSoundEmbark(), 1.0f, 1.0f, plugin.getLogger());
-            SoundParticleUtil.playSound(host, configManager.getSoundEmbark(), 1.0f, 1.0f, plugin.getLogger());
+            SoundParticleUtil.playBreezeWhiskSound(guest, configManager.getSoundEmbark(), plugin.getLogger());
+            SoundParticleUtil.playBreezeWhiskSound(host, configManager.getSoundEmbark(), plugin.getLogger());
         }
 
         applyCooldown(host);
@@ -308,6 +341,9 @@ public class TicketManager {
             if (configManager.isPlayParticles()) {
                 SoundParticleUtil.spawnParticles(guest.getLocation(), configManager.getParticleReturn(), 30, 0.5, 1.0, 0.5, plugin.getLogger());
             }
+            if (configManager.isPlaySounds()) {
+                SoundParticleUtil.playBreezeWhiskSound(guest, configManager.getSoundReturn(), plugin.getLogger());
+            }
 
             guest.teleport(safeLoc);
 
@@ -316,7 +352,7 @@ public class TicketManager {
                 SoundParticleUtil.spawnParticles(safeLoc, configManager.getParticleReturn(), 30, 0.5, 1.0, 0.5, plugin.getLogger());
             }
             if (configManager.isPlaySounds()) {
-                SoundParticleUtil.playSound(guest, configManager.getSoundReturn(), 1.0f, 1.0f, plugin.getLogger());
+                SoundParticleUtil.playBreezeWhiskSound(guest, configManager.getSoundReturn(), plugin.getLogger());
             }
 
             // Guest messaging
@@ -436,6 +472,194 @@ public class TicketManager {
         return Math.max(0, (exp - System.currentTimeMillis()) / 1000L);
     }
 
+    // =========================================================================
+    // RIP Anchor & Countdown Management
+    // =========================================================================
+
+    /**
+     * Starts the countdown before killing the player and anchoring their respawn.
+     */
+    public void startRipCountdown(Player player) {
+        Location anchor = configManager.getRipAnchor();
+        if (anchor == null) {
+            MessageUtil.sendMessage(player, configManager.getMessage("rip-no-anchor"));
+            return;
+        }
+
+        if (activeRipCountdowns.containsKey(player.getUniqueId())) {
+            MessageUtil.sendMessage(player, configManager.getMessage("rip-already-active"));
+            return;
+        }
+
+        // Cancel any pending warmup if active
+        cancelWarmup(player.getUniqueId());
+
+        long countdownTotal = configManager.getRipCountdownSeconds();
+        MessageUtil.sendMessage(player, configManager.getMessage("rip-countdown-start", Map.of("seconds", String.valueOf(countdownTotal))));
+        // Handling / tearing paper sound as countdown begins
+        SoundParticleUtil.playSound(player, configManager.getRipSoundCountdown(), 1.0f, 0.9f, "ITEM_BOOK_PAGE_TURN", plugin.getLogger());
+
+        int[] remaining = new int[]{(int) countdownTotal};
+        BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            if (!player.isOnline()) {
+                cancelRipCountdown(player.getUniqueId(), null);
+                return;
+            }
+
+            remaining[0]--;
+            if (remaining[0] > 0) {
+                MessageUtil.sendMessage(player, configManager.getMessage("rip-countdown-tick", Map.of("seconds", String.valueOf(remaining[0]))));
+                SoundParticleUtil.playSound(player, configManager.getRipSoundCountdown(), 1.0f, 1.1f, "ITEM_BOOK_PAGE_TURN", plugin.getLogger());
+            } else {
+                // Countdown complete! Ticket is torn!
+                BukkitTask cur = activeRipCountdowns.remove(player.getUniqueId());
+                if (cur != null) {
+                    cur.cancel();
+                }
+
+                Location freshAnchor = configManager.getRipAnchor();
+                if (freshAnchor != null) {
+                    pendingRipRespawns.put(player.getUniqueId(), freshAnchor);
+                }
+
+                // Play realistic ticket ripping sound effect right as the ticket is destroyed
+                SoundParticleUtil.playRipTicketSound(player, configManager.getRipSoundTear(), configManager.getRipSoundPaper(), plugin.getLogger());
+
+                // Normal death mechanics play out in this world
+                player.setHealth(0.0);
+            }
+        }, 20L, 20L);
+
+        activeRipCountdowns.put(player.getUniqueId(), task);
+    }
+
+    public boolean cancelRipCountdown(UUID uuid, String reason) {
+        BukkitTask task = activeRipCountdowns.remove(uuid);
+        if (task != null) {
+            task.cancel();
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline() && reason != null) {
+                MessageUtil.sendMessage(player, reason);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public boolean hasActiveRipCountdown(UUID uuid) {
+        return activeRipCountdowns.containsKey(uuid);
+    }
+
+    public Map<UUID, Location> getPendingRipRespawns() {
+        return pendingRipRespawns;
+    }
+
+    // =========================================================================
+    // Self-Trip (Random World Teleport) Management
+    // =========================================================================
+
+    /**
+     * Initiates a self-trip request requiring user confirmation.
+     */
+    public void requestSelfTrip(Player player) {
+        if (!configManager.isSelfTripEnabled()) {
+            MessageUtil.sendMessage(player, configManager.getMessage("cannot-invite-self"));
+            return;
+        }
+
+        if (activeSessions.containsKey(player.getUniqueId())) {
+            MessageUtil.sendMessage(player, configManager.getMessage("already-on-trip-self"));
+            return;
+        }
+
+        Map<String, Integer> allowed = configManager.getSelfTripAllowedWorlds();
+        List<World> available = allowed.keySet().stream()
+                .map(Bukkit::getWorld)
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (available.isEmpty()) {
+            MessageUtil.sendMessage(player, configManager.getMessage("self-trip-no-worlds"));
+            return;
+        }
+
+        long timeout = configManager.getSelfTripConfirmTimeoutSeconds();
+        long expiry = System.currentTimeMillis() + (timeout * 1000L);
+        pendingSelfTrips.put(player.getUniqueId(), expiry);
+
+        MessageUtil.sendSelfTripConfirmPrompt(player, timeout + "s");
+        SoundParticleUtil.playSound(player, configManager.getSoundWarning(), 1.0f, 1.2f, plugin.getLogger());
+    }
+
+    /**
+     * Executes a permanent one-way random world trip for a player.
+     */
+    public void executeSelfTrip(Player player) {
+        Map<String, Integer> allowed = configManager.getSelfTripAllowedWorlds();
+        List<World> available = allowed.keySet().stream()
+                .map(Bukkit::getWorld)
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (available.isEmpty()) {
+            MessageUtil.sendMessage(player, configManager.getMessage("self-trip-no-worlds"));
+            return;
+        }
+
+        // Prefer picking a world different from the player's current world if possible
+        List<World> otherWorlds = available.stream()
+                .filter(w -> !w.equals(player.getWorld()))
+                .toList();
+
+        World targetWorld = !otherWorlds.isEmpty()
+                ? otherWorlds.get(ThreadLocalRandom.current().nextInt(otherWorlds.size()))
+                : available.get(ThreadLocalRandom.current().nextInt(available.size()));
+
+        int range = configManager.getRangeForWorld(targetWorld.getName());
+        int randomX = ThreadLocalRandom.current().nextInt(-range, range + 1);
+        int randomZ = ThreadLocalRandom.current().nextInt(-range, range + 1);
+
+        int targetY;
+        if (targetWorld.getEnvironment() == World.Environment.NETHER) {
+            int minY = Math.max(targetWorld.getMinHeight() + 5, 10);
+            int maxY = Math.min(targetWorld.getMaxHeight() - 10, 110);
+            targetY = ThreadLocalRandom.current().nextInt(minY, maxY);
+        } else {
+            int highestY = targetWorld.getHighestBlockYAt(randomX, randomZ);
+            targetY = highestY <= targetWorld.getMinHeight() ? 64 : highestY + 1;
+        }
+
+        float yaw = ThreadLocalRandom.current().nextFloat() * 360f - 180f;
+        Location targetLoc = new Location(targetWorld, randomX + 0.5, targetY, randomZ + 0.5, yaw, 0f);
+
+        // Departure effects at current location
+        if (configManager.isPlayParticles()) {
+            SoundParticleUtil.spawnParticles(player.getLocation(), configManager.getParticleEmbark(), 40, 0.5, 1.0, 0.5, plugin.getLogger());
+        }
+        SoundParticleUtil.playBreezeWhiskSound(player, configManager.getSoundEmbark(), plugin.getLogger());
+
+        // Permanent one-way teleport
+        player.teleport(targetLoc);
+
+        // Arrival effects at destination
+        SoundParticleUtil.playBreezeWhiskSound(player, configManager.getSoundReturn(), plugin.getLogger());
+        Map<String, String> ph = Map.of(
+                "world", targetWorld.getName(),
+                "x", String.valueOf(targetLoc.getBlockX()),
+                "y", String.valueOf(targetLoc.getBlockY()),
+                "z", String.valueOf(targetLoc.getBlockZ())
+        );
+        MessageUtil.sendMessage(player, configManager.getMessage("self-trip-embarked", ph));
+    }
+
+    public boolean cancelSelfTrip(UUID uuid) {
+        return pendingSelfTrips.remove(uuid) != null;
+    }
+
+    public boolean hasPendingSelfTrip(UUID uuid) {
+        return pendingSelfTrips.containsKey(uuid);
+    }
+
     public void saveSessions() {
         YamlConfiguration config = new YamlConfiguration();
 
@@ -458,6 +682,20 @@ public class TicketManager {
             }
         }
 
+        ConfigurationSection ripSection = config.createSection("rip-respawns");
+        for (Map.Entry<UUID, Location> entry : pendingRipRespawns.entrySet()) {
+            Location loc = entry.getValue();
+            if (loc != null && loc.getWorld() != null) {
+                ConfigurationSection ripLocSec = ripSection.createSection(entry.getKey().toString());
+                ripLocSec.set("world", loc.getWorld().getName());
+                ripLocSec.set("x", loc.getX());
+                ripLocSec.set("y", loc.getY());
+                ripLocSec.set("z", loc.getZ());
+                ripLocSec.set("yaw", (double) loc.getYaw());
+                ripLocSec.set("pitch", (double) loc.getPitch());
+            }
+        }
+
         try {
             config.save(dataFile);
         } catch (IOException e) {
@@ -473,6 +711,7 @@ public class TicketManager {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
         activeSessions.clear();
         offlineReturns.clear();
+        pendingRipRespawns.clear();
 
         ConfigurationSection activeSection = config.getConfigurationSection("active");
         if (activeSection != null) {
@@ -510,6 +749,29 @@ public class TicketManager {
                 }
             }
         }
+
+        ConfigurationSection ripSection = config.getConfigurationSection("rip-respawns");
+        if (ripSection != null) {
+            for (String key : ripSection.getKeys(false)) {
+                ConfigurationSection sec = ripSection.getConfigurationSection(key);
+                if (sec != null) {
+                    try {
+                        UUID uuid = UUID.fromString(key);
+                        String worldName = sec.getString("world");
+                        World world = worldName != null ? Bukkit.getWorld(worldName) : null;
+                        if (world != null) {
+                            double x = sec.getDouble("x");
+                            double y = sec.getDouble("y");
+                            double z = sec.getDouble("z");
+                            float yaw = (float) sec.getDouble("yaw");
+                            float pitch = (float) sec.getDouble("pitch");
+                            pendingRipRespawns.put(uuid, new Location(world, x, y, z, yaw, pitch));
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        }
     }
 
     public void onDisable() {
@@ -521,6 +783,12 @@ public class TicketManager {
             warmup.cancel();
         }
         activeWarmups.clear();
+
+        for (BukkitTask ripTask : activeRipCountdowns.values()) {
+            ripTask.cancel();
+        }
+        activeRipCountdowns.clear();
+        pendingSelfTrips.clear();
 
         if (configManager.isReturnOnShutdown()) {
             for (TripSession session : new ArrayList<>(activeSessions.values())) {

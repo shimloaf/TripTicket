@@ -44,6 +44,54 @@ ticket:
   safe-teleport-check: true
 
 # ==============================================================================
+# R.I.P. Anchor & Countdown Configuration (/ticket rip)
+# ==============================================================================
+rip:
+  # Countdown in seconds before death occurs (default: 3 seconds)
+  countdown-seconds: 3
+
+  # Whether moving cancels the RIP countdown
+  cancel-on-move: true
+
+  # Whether taking damage cancels the RIP countdown
+  cancel-on-damage: true
+
+  # Sounds played during the RIP countdown and when tearing the ticket
+  sounds:
+    countdown: "ITEM_BOOK_PAGE_TURN"
+    tear: "ENTITY_SHEEP_SHEAR"
+    paper: "ITEM_BOOK_PAGE_TURN"
+
+  # Designated anchor/hub location where players respawn after /ticket rip.
+  # Can be updated in-game using /ticket setrip
+  anchor:
+    world: ""
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    yaw: 0.0
+    pitch: 0.0
+
+# ==============================================================================
+# Self-Trip (Random World Teleport) Configuration
+# ==============================================================================
+self-trip:
+  # Whether issuing a ticket to yourself initiates a permanent one-way random trip
+  enabled: true
+
+  # Time in seconds before the confirmation prompt expires (default: 30 seconds)
+  confirm-timeout-seconds: 30
+
+  # Default coordinate radius (+/-) if not specified for an individual world
+  default-range: 10000
+
+  # Whitelist of allowed destination worlds for random teleportation.
+  # Specify an optional custom coordinate range for each world.
+  # If a range is omitted, default-range (10000) is used.
+  allowed-worlds:
+    world: 10000
+
+# ==============================================================================
 # Permissions Configuration
 # ==============================================================================
 # Configure access rules directly here without needing a permissions manager,
@@ -69,9 +117,13 @@ permissions:
   # (Default: true)
   allow-everyone-return: true
 
-  # When true, players can check their remaining ticket time with /ticket remaining.
+  # When true, all players can check their remaining ticket time with /ticket remaining.
   # (Default: true)
   allow-everyone-check-time: true
+
+  # When true, all players can use /ticket rip to perish and respawn at the anchor world.
+  # (Default: true)
+  allow-everyone-rip: true
 
   # Customizable permission nodes (compatible with LuckPerms and other permission plugins)
   nodes:
@@ -84,6 +136,8 @@ permissions:
     bypass-warmup: "tripticket.warmup.bypass"
     reload: "tripticket.reload"
     admin: "tripticket.admin"
+    rip: "tripticket.rip"
+    setrip: "tripticket.setrip"
 
 visuals:
   # Show live remaining ticket time on the Action Bar
@@ -95,9 +149,10 @@ visuals:
   # Sound effects (set to "NONE" to disable any sound)
   play-sounds: true
   sounds:
-    embark: "ENTITY_ENDERMAN_TELEPORT"
+    embark: "ENTITY_BREEZE_SHOOT"
     warning: "BLOCK_NOTE_BLOCK_PLING"
-    return: "ENTITY_ENDERMAN_TELEPORT"
+    return: "ENTITY_BREEZE_IDLE_AIR"
+    whisk: "ENTITY_BREEZE_SHOOT"
 
   # Particle effects (set to "NONE" to disable)
   play-particles: true
@@ -131,6 +186,19 @@ messages:
   warmup-start: "%prefix%&eEmbarking in &6%seconds% seconds&e. Do not move or take damage!"
   warmup-cancelled-move: "%prefix%&cTrip cancelled because you moved."
   warmup-cancelled-damage: "%prefix%&cTrip cancelled because you took damage."
+  rip-no-anchor: "%prefix%&cThe RIP anchor location has not been set yet! An administrator must set it with &e/ticket setrip&c."
+  rip-already-active: "%prefix%&cYou already have a RIP countdown in progress!"
+  rip-countdown-start: "%prefix%&c&lR.I.P.! &eYou will perish in &c%seconds% seconds&e... Do not move or take damage!"
+  rip-countdown-tick: "%prefix%&c&lR.I.P. &ein &c%seconds%&e..."
+  rip-cancelled-move: "%prefix%&cRIP cancelled because you moved."
+  rip-cancelled-damage: "%prefix%&cRIP cancelled because you took damage."
+  rip-respawn-notice: "%prefix%&6You perished and your spirit was anchored at the travel hub."
+  rip-anchor-set: "%prefix%&aRIP anchor location successfully set to &e%world% &a(&b%x%&a, &b%y%&a, &b%z%&a)!"
+  self-trip-confirm: "%prefix%&c&lWARNING: &eYou are about to embark on a &cpermanent one-way random trip&e! Run &a/ticket accept &eto confirm or &c/ticket deny &eto cancel."
+  self-trip-embarked: "%prefix%&aYou embarked on a one-way trip to &e%world% &a(&b%x%&a, &b%y%&a, &b%z%&a)!"
+  self-trip-cancelled: "%prefix%&7You cancelled your one-way self trip."
+  self-trip-expired: "%prefix%&cYour one-way trip confirmation prompt has expired."
+  self-trip-no-worlds: "%prefix%&cNo whitelisted destination worlds are currently loaded on the server."
   offline-return-notice: "%prefix%&eYour trip ticket concluded while you were offline. You have been returned to your original world."
   custom-duration-denied: "%prefix%&cOnly server operators can specify custom ticket durations. Using default duration (&e%duration%&c)."
   reloaded: "%prefix%&aTripTicket configuration reloaded successfully!"
